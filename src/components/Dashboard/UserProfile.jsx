@@ -9,6 +9,8 @@ import BlockIcon from '@mui/icons-material/Block';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
+const DEFAULT_IMG = "http://localhost:5000/1747125889721%206821d1d7e6c73_downlo..._imresize.jpg";
+
 const UserProfile = ({ user, sharedMedia = [], sharedDocs = [], sharedPosts = [], online = true, onMessage, onCall, onBlock }) => {
   const [showDocs, setShowDocs] = React.useState(true);
   const [showMedia, setShowMedia] = React.useState(true);
@@ -19,7 +21,7 @@ const UserProfile = ({ user, sharedMedia = [], sharedDocs = [], sharedPosts = []
   return (
     <Box sx={{ p: 3, color: '#fff', fontFamily: 'Poppins, sans-serif', width: '100%' }}>
       <Stack alignItems="center" spacing={2}>
-        <Avatar src={user.avatar} sx={{ width: 100, height: 100, mb: 1, fontSize: 40 }}>
+        <Avatar src={user.avatar ? user.avatar : DEFAULT_IMG} sx={{ width: 100, height: 100, mb: 1, fontSize: 40 }}>
           {user.name ? user.name[0] : user.email[0]}
         </Avatar>
         <Typography fontWeight={700} fontSize={24}>{user.name}</Typography>
@@ -54,7 +56,7 @@ const UserProfile = ({ user, sharedMedia = [], sharedDocs = [], sharedPosts = []
         <Collapse in={showMedia} timeout="auto" unmountOnExit>
           <Stack direction="row" spacing={1} pb={2}>
             {sharedMedia.length === 0 ? <Typography color="#aaa">No media</Typography> : sharedMedia.map((img, i) => (
-              <Paper key={i} sx={{ width: 60, height: 60, bgcolor: '#23244a', backgroundImage: `url(${img})`, backgroundSize: 'cover' }} />
+              <Paper key={i} sx={{ width: 60, height: 60, bgcolor: '#23244a', backgroundImage: `url(${img || DEFAULT_IMG})`, backgroundSize: 'cover' }} />
             ))}
           </Stack>
         </Collapse>
@@ -67,7 +69,7 @@ const UserProfile = ({ user, sharedMedia = [], sharedDocs = [], sharedPosts = []
         <Collapse in={showPosts} timeout="auto" unmountOnExit>
           <Stack direction="row" spacing={1} pb={2}>
             {sharedPosts.length === 0 ? <Typography color="#aaa">No posts</Typography> : sharedPosts.map((img, i) => (
-              <Paper key={i} sx={{ width: 60, height: 60, bgcolor: '#23244a', backgroundImage: `url(${img})`, backgroundSize: 'cover' }} />
+              <Paper key={i} sx={{ width: 60, height: 60, bgcolor: '#23244a', backgroundImage: `url(${img || DEFAULT_IMG})`, backgroundSize: 'cover' }} />
             ))}
           </Stack>
         </Collapse>

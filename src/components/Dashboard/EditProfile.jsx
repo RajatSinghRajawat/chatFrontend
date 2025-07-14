@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-    Box, List, ListItem, ListItemIcon, ListItemText, Avatar, Typography, TextField, Button, Snackbar, IconButton, Grid, Container, Card, CardContent, Chip, useTheme, useMediaQuery
+    Box, List, ListItem, ListItemIcon, ListItemText, Avatar, Typography, TextField, Button, Snackbar, IconButton, Grid, Container, Card, CardContent, Chip, useTheme, useMediaQuery, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PersonIcon from '@mui/icons-material/Person';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
+import ChatIcon from '@mui/icons-material/Chat';
 import EditIcon from '@mui/icons-material/Edit';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useNavigate } from 'react-router-dom';
+
+const DEFAULT_IMG = "https://img.lovepik.com/photo/60178/3864.jpg_wh300.jpg";
 
 const EditProfile = () => {
     const loggedInUser = JSON.parse(localStorage.getItem('userdatachat'));
@@ -37,6 +40,8 @@ const EditProfile = () => {
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'edit', 'settings'
     const navigate = useNavigate();
 
     const token = localStorage.getItem("token")
@@ -177,10 +182,19 @@ const EditProfile = () => {
         setAvatarFile(null);
     };
 
-    const handleLogout = () => {
+    const handleLogoutClick = () => {
+        setLogoutModalOpen(true);
+    };
+
+    const handleLogoutConfirm = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('userdatachat');
+        setLogoutModalOpen(false);
         navigate('/login');
+    };
+
+    const handleLogoutCancel = () => {
+        setLogoutModalOpen(false);
     };
 
     const renderSidebar = () => (
@@ -229,10 +243,11 @@ const EditProfile = () => {
             <List sx={{ width: '100%', px: 2 }}>
                 <ListItem
                     button
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => setActiveTab('profile')}
                     sx={{
                         borderRadius: 2,
                         mb: 1,
+                        bgcolor: activeTab === 'profile' ? 'rgba(255,255,255,0.15)' : undefined,
                         '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
                     }}
                 >
@@ -241,10 +256,23 @@ const EditProfile = () => {
                 </ListItem>
                 <ListItem
                     button
+                    onClick={() => navigate('/chat')}
                     sx={{
                         borderRadius: 2,
                         mb: 1,
-                        bgcolor: 'rgba(255,255,255,0.1)',
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' }
+                    }}
+                >
+                    <ListItemIcon><ChatIcon sx={{ color: 'white' }} /></ListItemIcon>
+                    <ListItemText primary="Chat" />
+                </ListItem>
+                <ListItem
+                    button
+                    onClick={() => setActiveTab('settings')}
+                    sx={{
+                        borderRadius: 2,
+                        mb: 1,
+                        bgcolor: activeTab === 'settings' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.1)',
                         '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
                     }}
                 >
@@ -253,7 +281,7 @@ const EditProfile = () => {
                 </ListItem>
                 <ListItem
                     button
-                    onClick={handleLogout}
+                    onClick={handleLogoutClick}
                     sx={{
                         borderRadius: 2,
                         mb: 1,
@@ -267,6 +295,91 @@ const EditProfile = () => {
         </Box>
     );
 
+    const renderProfileCard = () => (
+        <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '80vh',
+            width: '100%',
+            bgcolor: '#fff',
+            borderRadius: 4,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.10)',
+            p: { xs: 2, md: 6 },
+            mt: 4
+        }}>
+            <Box sx={{
+                width: 160,
+                height: 160,
+                borderRadius: '50%',
+                overflow: 'hidden',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
+                mb: 2
+            }}>
+                <img
+                    src={profile.avatar || (avatarFile ? URL.createObjectURL(avatarFile) : undefined) || DEFAULT_IMG}
+                    alt={profile.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+            </Box>
+            <Typography variant="h4" fontWeight={700} sx={{ mb: 1, textAlign: 'center' }}>
+                {profile.name} {profile.surname}
+            </Typography>
+            <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 1, textAlign: 'center' }}>
+                {profile.bio || 'No bio provided.'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, textAlign: 'center' }}>
+                {profile.organization ? `${profile.organization} • ` : ''}{profile.city}{profile.city && profile.country ? ', ' : ''}{profile.country}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 4, mb: 3 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6" fontWeight={700}>624</Typography>
+                    <Typography variant="caption" color="text.secondary">Views</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6" fontWeight={700}>142</Typography>
+                    <Typography variant="caption" color="text.secondary">Followers</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6" fontWeight={700}>104</Typography>
+                    <Typography variant="caption" color="text.secondary">Likes</Typography>
+                </Box>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                <Button variant="contained" color="primary" sx={{ borderRadius: 2, px: 4, fontWeight: 600 }}>+ Add</Button>
+                <Button variant="outlined" color="primary" sx={{ borderRadius: 2, px: 4, fontWeight: 600 }}>Message</Button>
+            </Box>
+            <Button variant="text" color="secondary" sx={{ mt: 2 }} onClick={() => setActiveTab('edit')}>
+                Edit Profile
+            </Button>
+        </Box>
+    );
+
+    const renderSettingsCard = () => (
+        <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '80vh',
+            width: '100%',
+            bgcolor: '#fff',
+            borderRadius: 4,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.10)',
+            p: { xs: 2, md: 6 },
+            mt: 4
+        }}>
+            <SettingsIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+            <Typography variant="h4" fontWeight={700} sx={{ mb: 2, textAlign: 'center' }}>
+                Settings
+            </Typography>
+            <Typography variant="body1" sx={{ color: 'text.secondary', mb: 2, textAlign: 'center' }}>
+                Settings coming soon! Here you can add preferences, theme, notifications, etc.
+            </Typography>
+        </Box>
+    );
+
     const renderMainContent = () => (
         <Box sx={{
             flex: 1,
@@ -275,289 +388,293 @@ const EditProfile = () => {
             minHeight: '100vh',
             bgcolor: '#f8fafc'
         }}>
-            <Container maxWidth="lg">
-                {/* Debug Info - Remove this in production */}
-               
-                <Card sx={{
-                    borderRadius: 3,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                    overflow: 'hidden'
-                }}>
-                    <Box sx={{
-                        bgcolor: 'primary.main',
-                        color: 'white',
-                        p: 3,
-                        position: 'relative'
+            <Container maxWidth="sm">
+                {activeTab === 'profile' ? (
+                    renderProfileCard()
+                ) : activeTab === 'settings' ? (
+                    renderSettingsCard()
+                ) : (
+                    <Card sx={{
+                        borderRadius: 3,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                        overflow: 'hidden'
                     }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h4" fontWeight={700}>
-                                Profile Settings
-                            </Typography>
-                            <Button
-                                variant={isEditing ? "outlined" : "contained"}
-                                startIcon={isEditing ? <CancelIcon /> : <EditIcon />}
-                                onClick={() => setIsEditing(!isEditing)}
-                                sx={{
-                                    color: isEditing ? 'white' : 'white',
-                                    borderColor: 'white',
-                                    '&:hover': {
-                                        bgcolor: isEditing ? 'rgba(255,255,255,0.1)' : 'primary.dark'
-                                    }
-                                }}
-                            >
-                                {isEditing ? 'Cancel' : 'Edit Profile'}
-                            </Button>
+                        <Box sx={{
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            p: 3,
+                            position: 'relative'
+                        }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="h4" fontWeight={700}>
+                                    Profile Settings
+                                </Typography>
+                                <Button
+                                    variant={isEditing ? "outlined" : "contained"}
+                                    startIcon={isEditing ? <CancelIcon /> : <EditIcon />}
+                                    onClick={() => setIsEditing(!isEditing)}
+                                    sx={{
+                                        color: isEditing ? 'white' : 'white',
+                                        borderColor: 'white',
+                                        '&:hover': {
+                                            bgcolor: isEditing ? 'rgba(255,255,255,0.1)' : 'primary.dark'
+                                        }
+                                    }}
+                                >
+                                    {isEditing ? 'Cancel' : 'Edit Profile'}
+                                </Button>
+                            </Box>
                         </Box>
-                    </Box>
 
-                    <CardContent sx={{ p: 4 }}>
-                        <form onSubmit={handleSubmit}>
-                            <Grid container spacing={4}>
-                                {/* Personal Information */}
-                                <Grid item xs={12} md={6}>
-                                    <Typography variant="h6" fontWeight={600} sx={{ mb: 3, color: 'primary.main' }}>
-                                        Personal Information
-                                    </Typography>
+                        <CardContent sx={{ p: 4 }}>
+                            <form onSubmit={handleSubmit}>
+                                <Grid container spacing={4}>
+                                    {/* Personal Information */}
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="h6" fontWeight={600} sx={{ mb: 3, color: 'primary.main' }}>
+                                            Personal Information
+                                        </Typography>
 
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                label="First Name"
-                                                name="name"
-                                                value={profile.name}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                label="Last Name"
-                                                name="surname"
-                                                value={profile.surname}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                label="Username"
-                                                name="username"
-                                                value={profile.username}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                label="Email"
-                                                name="email"
-                                                value={profile.email}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                label="Bio"
-                                                name="bio"
-                                                value={profile.bio}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                multiline
-                                                rows={3}
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
+                                        <Grid container spacing={2}>
+                                            <Grid item xs={12} sm={6}>
+                                                <TextField
+                                                    label="First Name"
+                                                    name="name"
+                                                    value={profile.name}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                                <TextField
+                                                    label="Last Name"
+                                                    name="surname"
+                                                    value={profile.surname}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                                <TextField
+                                                    label="Username"
+                                                    name="username"
+                                                    value={profile.username}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                                <TextField
+                                                    label="Email"
+                                                    name="email"
+                                                    value={profile.email}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                                <TextField
+                                                    label="Bio"
+                                                    name="bio"
+                                                    value={profile.bio}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    multiline
+                                                    rows={3}
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
                                         </Grid>
                                     </Grid>
-                                </Grid>
 
-                                {/* Contact & Location */}
-                                <Grid item xs={12} md={6}>
-                                    <Typography variant="h6" fontWeight={600} sx={{ mb: 3, color: 'primary.main' }}>
-                                        Contact & Location
-                                    </Typography>
+                                    {/* Contact & Location */}
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="h6" fontWeight={600} sx={{ mb: 3, color: 'primary.main' }}>
+                                            Contact & Location
+                                        </Typography>
 
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                label="Personal Phone"
-                                                name="personalPhone"
-                                                value={profile.personalPhone}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                label="Work Phone"
-                                                name="workPhone"
-                                                value={profile.workPhone}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                label="City"
-                                                name="city"
-                                                value={profile.city}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                label="Country"
-                                                name="country"
-                                                value={profile.country}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                label="Organization"
-                                                name="organization"
-                                                value={profile.organization}
-                                                onChange={handleChange}
-                                                fullWidth
-                                                disabled={!isEditing}
-                                                sx={{ mb: 2 }}
-                                                InputProps={{
-                                                    sx: { borderRadius: 2 }
-                                                }}
-                                            />
+                                        <Grid container spacing={2}>
+                                            <Grid item xs={12} sm={6}>
+                                                <TextField
+                                                    label="Personal Phone"
+                                                    name="personalPhone"
+                                                    value={profile.personalPhone}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                                <TextField
+                                                    label="Work Phone"
+                                                    name="workPhone"
+                                                    value={profile.workPhone}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                                <TextField
+                                                    label="City"
+                                                    name="city"
+                                                    value={profile.city}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                                <TextField
+                                                    label="Country"
+                                                    name="country"
+                                                    value={profile.country}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                                <TextField
+                                                    label="Organization"
+                                                    name="organization"
+                                                    value={profile.organization}
+                                                    onChange={handleChange}
+                                                    fullWidth
+                                                    disabled={!isEditing}
+                                                    sx={{ mb: 2 }}
+                                                    InputProps={{
+                                                        sx: { borderRadius: 2 }
+                                                    }}
+                                                />
+                                            </Grid>
                                         </Grid>
                                     </Grid>
-                                </Grid>
 
-                                {/* Profile Picture */}
-                                <Grid item xs={12}>
-                                    <Typography variant="h6" fontWeight={600} sx={{ mb: 3, color: 'primary.main' }}>
-                                        Profile Picture
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
-                                        <Avatar
-                                            src={profile.avatar || (avatarFile ? URL.createObjectURL(avatarFile) : undefined)}
-                                            sx={{
-                                                width: 120,
-                                                height: 120,
-                                                border: '4px solid #e3f2fd',
-                                                boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-                                            }}
-                                        >
-                                            {profile.name ? profile.name[0].toUpperCase() : <PersonIcon sx={{ fontSize: 50 }} />}
-                                        </Avatar>
-                                        {isEditing && (
-                                            <Button
-                                                variant="outlined"
-                                                component="label"
-                                                startIcon={<PhotoCameraIcon />}
-                                                sx={{ borderRadius: 2 }}
-                                            >
-                                                Upload New Photo
-                                                <input type="file" hidden accept="image/*" onChange={handleAvatarChange} />
-                                            </Button>
-                                        )}
-                                        {avatarFile && (
-                                            <Chip
-                                                label={avatarFile.name}
-                                                onDelete={() => setAvatarFile(null)}
-                                                color="primary"
-                                                variant="outlined"
-                                            />
-                                        )}
-                                    </Box>
-                                </Grid>
-
-
-
-                                {/* Submit Button */}
-                                {isEditing && (
+                                    {/* Profile Picture */}
                                     <Grid item xs={12}>
-                                        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3 }}>
-                                            <Button
-                                                type="submit"
-                                                variant="contained"
-                                                size="large"
-                                                startIcon={<SaveIcon />}
-                                                disabled={loading}
+                                        <Typography variant="h6" fontWeight={600} sx={{ mb: 3, color: 'primary.main' }}>
+                                            Profile Picture
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                                            <Avatar
+                                                src={profile.avatar || (avatarFile ? URL.createObjectURL(avatarFile) : undefined)}
                                                 sx={{
-                                                    px: 4,
-                                                    py: 1.5,
-                                                    borderRadius: 2,
-                                                    fontWeight: 600,
-                                                    fontSize: '1.1rem'
+                                                    width: 120,
+                                                    height: 120,
+                                                    border: '4px solid #e3f2fd',
+                                                    boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
                                                 }}
                                             >
-                                                {loading ? 'Saving...' : 'Save Changes'}
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                size="large"
-                                                onClick={handleCancel}
-                                                disabled={loading}
-                                                sx={{
-                                                    px: 4,
-                                                    py: 1.5,
-                                                    borderRadius: 2,
-                                                    fontWeight: 600,
-                                                    fontSize: '1.1rem'
-                                                }}
-                                            >
-                                                Cancel
-                                            </Button>
+                                                {profile.name ? profile.name[0].toUpperCase() : <PersonIcon sx={{ fontSize: 50 }} />}
+                                            </Avatar>
+                                            {isEditing && (
+                                                <Button
+                                                    variant="outlined"
+                                                    component="label"
+                                                    startIcon={<PhotoCameraIcon />}
+                                                    sx={{ borderRadius: 2 }}
+                                                >
+                                                    Upload New Photo
+                                                    <input type="file" hidden accept="image/*" onChange={handleAvatarChange} />
+                                                </Button>
+                                            )}
+                                            {avatarFile && (
+                                                <Chip
+                                                    label={avatarFile.name}
+                                                    onDelete={() => setAvatarFile(null)}
+                                                    color="primary"
+                                                    variant="outlined"
+                                                />
+                                            )}
                                         </Box>
                                     </Grid>
-                                )}
-                            </Grid>
-                        </form>
-                    </CardContent>
-                </Card>
+
+
+
+                                    {/* Submit Button */}
+                                    {isEditing && (
+                                        <Grid item xs={12}>
+                                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3 }}>
+                                                <Button
+                                                    type="submit"
+                                                    variant="contained"
+                                                    size="large"
+                                                    startIcon={<SaveIcon />}
+                                                    disabled={loading}
+                                                    sx={{
+                                                        px: 4,
+                                                        py: 1.5,
+                                                        borderRadius: 2,
+                                                        fontWeight: 600,
+                                                        fontSize: '1.1rem'
+                                                    }}
+                                                >
+                                                    {loading ? 'Saving...' : 'Save Changes'}
+                                                </Button>
+                                                <Button
+                                                    variant="outlined"
+                                                    size="large"
+                                                    onClick={handleCancel}
+                                                    disabled={loading}
+                                                    sx={{
+                                                        px: 4,
+                                                        py: 1.5,
+                                                        borderRadius: 2,
+                                                        fontWeight: 600,
+                                                        fontSize: '1.1rem'
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </Box>
+                                        </Grid>
+                                    )}
+                                </Grid>
+                            </form>
+                        </CardContent>
+                    </Card>
+                )}
             </Container>
         </Box>
     );
@@ -587,6 +704,58 @@ const EditProfile = () => {
                     </IconButton>
                 }
             />
+
+            {/* Logout Confirmation Modal */}
+            <Dialog
+                open={logoutModalOpen}
+                onClose={handleLogoutCancel}
+                aria-labelledby="logout-dialog-title"
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        minWidth: 400
+                    }
+                }}
+            >
+                <DialogTitle id="logout-dialog-title" sx={{ 
+                    bgcolor: 'primary.main', 
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '1.2rem'
+                }}>
+                    Confirm Logout
+                </DialogTitle>
+                <DialogContent sx={{ pt: 3, pb: 2 }}>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                        Are you sure you want to logout? You will be redirected to the login page.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 3, pt: 1 }}>
+                    <Button 
+                        onClick={handleLogoutCancel}
+                        variant="outlined"
+                        sx={{ 
+                            borderRadius: 2,
+                            px: 3,
+                            fontWeight: 600
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button 
+                        onClick={handleLogoutConfirm}
+                        variant="contained"
+                        color="error"
+                        sx={{ 
+                            borderRadius: 2,
+                            px: 3,
+                            fontWeight: 600
+                        }}
+                    >
+                        Logout
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

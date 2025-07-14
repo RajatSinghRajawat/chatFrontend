@@ -38,6 +38,8 @@ const ProfilePage = ({ isSelf }) => {
   if (!user) return <Typography sx={{ color: '#fff', p: 4 }}>User not found</Typography>;
   if (error) return <Typography sx={{ color: 'error.main', p: 4 }}>{error}</Typography>;
 
+  const DEFAULT_IMG = "http://localhost:5000/1747125889721%206821d1d7e6c73_downlo..._imresize.jpg";
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#f7f9fa', color: '#23243a', fontFamily: 'Inter, Roboto, system-ui, sans-serif', p: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', p: 2, borderBottom: '1px solid #e3e8ee', bgcolor: '#2196f3' }}>
@@ -47,7 +49,7 @@ const ProfilePage = ({ isSelf }) => {
       <Stack alignItems="center" spacing={2} sx={{ mt: 6 }}>
         <Paper elevation={6} sx={{ p: 4, borderRadius: 4, minWidth: 340, maxWidth: 420, width: '100%', bgcolor: '#fff', boxShadow: '0 4px 24px 0 #4F8CFF20' }}>
           <Stack alignItems="center" spacing={1}>
-            <Avatar src={user.avatar} sx={{ width: 120, height: 120, fontSize: 48, mb: 1 }}>
+            <Avatar src={user.avatar ? user.avatar : DEFAULT_IMG} sx={{ width: 120, height: 120, fontSize: 48, mb: 1 }}>
               {user.name ? user.name[0] : user.username ? user.username[0] : '?'}
             </Avatar>
             <Typography variant="h5" fontWeight={700}>{user.name}</Typography>

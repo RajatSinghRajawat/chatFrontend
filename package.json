@@ -21,6 +21,7 @@
     "axios": "^1.10.0",
     "framer-motion": "^12.23.3",
     "icons": "^1.0.0",
+    "lodash.debounce": "^4.0.8",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.56.3",

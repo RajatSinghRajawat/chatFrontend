@@ -33,9 +33,13 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import dayjs from 'dayjs';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import debounce from 'lodash.debounce';
 
 const loggedInUser = JSON.parse(localStorage.getItem('userdatachat'));
 const myId = loggedInUser?._id;
+
+const STATIC_IMG = "https://img.lovepik.com/photo/60178/3864.jpg_wh300.jpg";
 
 const Chatpage = () => {
   const [users, setUsers] = useState([]);
@@ -63,14 +67,30 @@ const Chatpage = () => {
   const [contextMenu, setContextMenu] = useState(null); // { mouseX, mouseY, message }
   const [selectedMessages, setSelectedMessages] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
+  const [file, setFile] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [files, setFiles] = useState([]);
 
   const navigate = useNavigate();
 
   useEffect(() => {
     socket.current = io('http://localhost:5000'); // backend URL
     socket.current.on('new_message', (data) => {
+      // If the message is from the currently selected user, just add to messages
+      if (selectedUser && data.senderId === selectedUser._id) {
+        setMessages(prev => [...prev, data.message]);
+      } else {
+        // Otherwise, increment unread count for that user
+        setUsers(prev =>
+          prev.map(u =>
+            u._id === data.senderId
+              ? { ...u, unread: (u.unread || 0) + 1 }
+              : u
+          )
+        );
+      }
       toast.info(`New message from ${data.senderName || 'someone'}`);
-      // Optionally: setMessages(prev => [...prev, data.message]);
     });
     socket.current.on('edit_message', (data) => {
       toast.info('A message was edited');
@@ -83,7 +103,7 @@ const Chatpage = () => {
     return () => {
       socket.current.disconnect();
     };
-  }, []);
+  }, [selectedUser]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -157,19 +177,68 @@ const Chatpage = () => {
     };
   }, []);
 
+  // Debounced search function
+  const debouncedSearch = useRef(
+    debounce(async (q, token) => {
+      if (!q) {
+        setSearching(false);
+        const res = await axios.get('http://localhost:5000/api/auth/users', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUsers(res.data);
+        return;
+      }
+      setSearching(true);
+      try {
+        const res = await axios.get(`http://localhost:5000/api/auth/search?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUsers(res.data);
+      } catch (err) {
+        setError('Failed to search users');
+      } finally {
+        setSearching(false);
+      }
+    }, 400)
+  ).current;
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    debouncedSearch(searchTerm, token);
+    return () => debouncedSearch.cancel();
+  }, [searchTerm]);
+
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!message.trim() || !selectedUser) return;
+    if ((!message.trim() && files.length === 0) || !selectedUser) return;
     setSending(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(
-        `http://localhost:5000/api/messages/send/${selectedUser._id}`,
-        { content: message },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      let res;
+      if (files.length > 0) {
+        const formData = new FormData();
+        files.forEach(file => formData.append('image', file));
+        if (message.trim()) formData.append('content', message);
+        res = await axios.post(
+          `http://localhost:5000/api/messages/send/${selectedUser._id}`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+      } else {
+        res = await axios.post(
+          `http://localhost:5000/api/messages/send/${selectedUser._id}`,
+          { content: message },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
       setMessages((prev) => [...prev, res.data]);
       setMessage('');
+      setFiles([]);
     } catch (err) {
       setError('Failed to send message');
     } finally {
@@ -277,10 +346,10 @@ const Chatpage = () => {
       </Box>
       <Drawer anchor="left" open={drawerOpen} onClose={handleDrawerClose} PaperProps={{ sx: { bgcolor: '#23243a', color: '#fff', width: 320, fontFamily: 'Inter, Roboto, system-ui, sans-serif' } }}>
         <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <Avatar src={loggedInUser?.avatar} sx={{ width: 72, height: 72 }} />
+          <Avatar src={STATIC_IMG} sx={{ width: 72, height: 72 }} />
           <Typography fontWeight={700} fontSize={20}>{loggedInUser?.name}</Typography>
           <Typography color="#aaa" fontSize={14}>{loggedInUser?.email}</Typography>
-          <Button fullWidth variant="outlined" sx={{ mt: 2, color: '#fff', borderColor: '#4F8CFF' }} onClick={() => { handleDrawerClose(); navigate('/profile/me'); }}>My Profile</Button>
+          <Button fullWidth variant="outlined" sx={{ mt: 2, color: '#fff', borderColor: '#4F8CFF' }} onClick={() => { handleDrawerClose(); navigate('/profile/edit'); }}>My Profile</Button>
           <Button fullWidth sx={{ color: '#fff' }} startIcon={<GroupIcon />}>New Group</Button>
           <Button fullWidth sx={{ color: '#fff' }} startIcon={<ContactsIcon />}>Contacts</Button>
           <Button fullWidth sx={{ color: '#fff' }} startIcon={<CallIcon />}>Calls</Button>
@@ -294,7 +363,9 @@ const Chatpage = () => {
           <TextField
             size="small"
             fullWidth
-            placeholder="Search Message..."
+            placeholder="Search user..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -313,7 +384,9 @@ const Chatpage = () => {
             sx={{ flex: 1, overflowY: 'auto', bgcolor: 'transparent', px: 1 }}
             className="hide-scrollbar"
           >
-            {loadingUsers ? (
+            {searchTerm && !loadingUsers && users.length === 0 ? (
+              <Typography color="#aaa" sx={{ p: 2 }}>No users found for "{searchTerm}"</Typography>
+            ) : loadingUsers ? (
               <Stack alignItems="center" justifyContent="center" sx={{ height: 200 }}>
                 <CircularProgress color="primary" />
               </Stack>
@@ -327,15 +400,21 @@ const Chatpage = () => {
                 const lastMsgSender = user.lastMessageSender === myId ? 'You' : user.name;
                 const lastMsgTime = user.lastMessageTime ? dayjs(user.lastMessageTime).format('HH:mm') : '';
                 const showUnread = user.unread && user.lastMessageSender !== myId;
+                const isSelected = selectedUser && selectedUser._id === user._id;
                 return (
                   <ListItemButton
                     key={user._id}
-                    selected={selectedUser && selectedUser._id === user._id}
+                    selected={isSelected}
                     onClick={() => setSelectedUser(user)}
                     sx={{
                       borderRadius: 2,
                       mb: 1,
-                      bgcolor: selectedUser && selectedUser._id === user._id ? '#2D2E4A' : 'transparent',
+                      bgcolor:
+                        isSelected
+                          ? '#2D2E4A'
+                          : user.unread > 0
+                          ? '#1e2e1e'
+                          : 'transparent',
                       transition: 'background 0.2s',
                       '&:hover': { bgcolor: '#23243a' },
                       color: '#fff',
@@ -345,7 +424,7 @@ const Chatpage = () => {
                   >
                     <ListItemAvatar>
                       <Avatar
-                        src={user.avatar}
+                        src={STATIC_IMG}
                         alt={user.name}
                         sx={{ boxShadow: 2, width: 48, height: 48 }}
                       >
@@ -397,7 +476,7 @@ const Chatpage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', p: 2, bgcolor: '#23243a', borderBottom: '1px solid #23243a', minHeight: 72, justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {selectedUser && (
-              <Avatar src={selectedUser.avatar} sx={{ width: 48, height: 48, mr: 2 }}>
+              <Avatar src={STATIC_IMG} sx={{ width: 48, height: 48, mr: 2 }}>
                 {selectedUser.name ? selectedUser.name[0] : <PersonIcon />}
               </Avatar>
             )}
@@ -409,7 +488,7 @@ const Chatpage = () => {
             </Box>
           </Box>
           <IconButton onClick={handleMyProfileOpen} sx={{ ml: 2 }}>
-            <Avatar src={loggedInUser?.avatar} sx={{ width: 40, height: 40 }}>
+            <Avatar src={loggedInUser?.avatar || STATIC_IMG} sx={{ width: 40, height: 40 }}>
               {loggedInUser?.name ? loggedInUser.name[0] : <AccountCircleIcon />}
             </Avatar>
           </IconButton>
@@ -473,7 +552,19 @@ const Chatpage = () => {
                               boxShadow: 6,
                             }}
                           >
-                            {msg.content}
+                            {msg.fileUrls && msg.fileUrls.length > 0 ? (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {msg.fileUrls.map((url, idx) =>
+                                  msg.type === 'image' || (msg.type === 'mixed' && url.match(/\.(jpg|jpeg|png|gif|avif)$/i)) ? (
+                                    <img key={idx} src={url} alt="sent-img" style={{ maxWidth: 200, maxHeight: 400, borderRadius: 8, objectFit: 'contain' }} />
+                                  ) : msg.type === 'video' || (msg.type === 'mixed' && url.match(/\.mp4$/i)) ? (
+                                    <video key={idx} src={url} controls style={{ maxWidth: 200, maxHeight: 400, borderRadius: 8, objectFit: 'contain' }} />
+                                  ) : null
+                                )}
+                              </Box>
+                            ) : (
+                              msg.content
+                            )}
                           </Paper>
                           <Typography
                             variant="caption"
@@ -522,7 +613,19 @@ const Chatpage = () => {
                               boxShadow: 2,
                             }}
                           >
-                            {msg.content}
+                            {msg.fileUrls && msg.fileUrls.length > 0 ? (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {msg.fileUrls.map((url, idx) =>
+                                  msg.type === 'image' || (msg.type === 'mixed' && url.match(/\.(jpg|jpeg|png|gif|avif)$/i)) ? (
+                                    <img key={idx} src={url} alt="sent-img" style={{ maxWidth: 200, maxHeight: 400, borderRadius: 8, objectFit: 'contain' }} />
+                                  ) : msg.type === 'video' || (msg.type === 'mixed' && url.match(/\.mp4$/i)) ? (
+                                    <video key={idx} src={url} controls style={{ maxWidth: 200, maxHeight: 400, borderRadius: 8, objectFit: 'contain' }} />
+                                  ) : null
+                                )}
+                              </Box>
+                            ) : (
+                              msg.content
+                            )}
                           </Paper>
                           <Typography
                             variant="caption"
@@ -547,6 +650,31 @@ const Chatpage = () => {
         </Box>
         {selectedUser && (
           <Box component="form" onSubmit={handleSend} sx={{ p: 2, bgcolor: '#23243a', borderTop: '1px solid #23243a', display: 'flex', gap: 2 }}>
+            <IconButton component="label" sx={{ color: '#fff' }}>
+              <AttachFileIcon />
+              <input
+                type="file"
+                accept="image/*,video/*"
+                hidden
+                multiple
+                onChange={e => setFiles(Array.from(e.target.files))}
+              />
+            </IconButton>
+            {files.length > 0 && (
+              <Box sx={{ color: '#fff', display: 'flex', alignItems: 'center', fontSize: 12, ml: 1, gap: 1, flexWrap: 'wrap' }}>
+                {files.map((file, idx) => (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {file.type.startsWith('image/') ? (
+                      <img src={URL.createObjectURL(file)} alt={file.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, marginRight: 4 }} />
+                    ) : file.type.startsWith('video/') ? (
+                      <video src={URL.createObjectURL(file)} style={{ width: 32, height: 32, borderRadius: 4, marginRight: 4 }} />
+                    ) : null}
+                    <span>{file.name}</span>
+                  </Box>
+                ))}
+                <IconButton size="small" onClick={() => setFiles([])} sx={{ color: '#fff' }}><CloseIcon fontSize="small" /></IconButton>
+              </Box>
+            )}
             <TextField
               type="text"
               fullWidth
@@ -572,7 +700,7 @@ const Chatpage = () => {
       </Box>
       <Dialog open={profileOpen} onClose={handleProfileClose} maxWidth="xs" fullWidth TransitionComponent={motion.div} TransitionProps={{ initial: { scale: 0.8, opacity: 0 }, animate: { scale: 1, opacity: 1 }, exit: { scale: 0.8, opacity: 0 }, transition: { duration: 0.3 } }}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Avatar src={profileUser?.avatar} sx={{ width: 56, height: 56, mr: 2 }}>
+          <Avatar src={STATIC_IMG} sx={{ width: 56, height: 56, mr: 2 }}>
             {profileUser?.name ? profileUser.name[0] : <PersonIcon />}
           </Avatar>
           <Box>
@@ -589,7 +717,7 @@ const Chatpage = () => {
       </Dialog>
       <Dialog open={myProfileOpen} onClose={handleMyProfileClose} maxWidth="xs" fullWidth TransitionComponent={motion.div} TransitionProps={{ initial: { scale: 0.8, opacity: 0 }, animate: { scale: 1, opacity: 1 }, exit: { scale: 0.8, opacity: 0 }, transition: { duration: 0.3 } }}>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Avatar src={loggedInUser?.avatar} sx={{ width: 56, height: 56, mr: 2 }}>
+          <Avatar src={STATIC_IMG} sx={{ width: 56, height: 56, mr: 2 }}>
             {loggedInUser?.name ? loggedInUser.name[0] : <AccountCircleIcon />}
           </Avatar>
           <Box>
