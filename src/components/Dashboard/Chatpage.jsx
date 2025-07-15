@@ -35,6 +35,8 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import dayjs from 'dayjs';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import debounce from 'lodash.debounce';
+import AddIcon from '@mui/icons-material/Add';
+import GroupAddIcon from '@mui/icons-material/GroupAdd';
 
 const loggedInUser = JSON.parse(localStorage.getItem('userdatachat'));
 const myId = loggedInUser?._id;
@@ -71,6 +73,13 @@ const Chatpage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [searching, setSearching] = useState(false);
   const [files, setFiles] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [groupCreating, setGroupCreating] = useState(false);
+  const [groupError, setGroupError] = useState('');
 
   const navigate = useNavigate();
 
@@ -177,6 +186,107 @@ const Chatpage = () => {
     };
   }, []);
 
+  // Fetch groups from API
+  const fetchGroups = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('http://localhost:5000/api/groups', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setGroups(res.data);
+    } catch (err) {
+      // Optionally handle error
+    }
+  };
+
+  useEffect(() => {
+    fetchGroups();
+  }, []);
+
+  // Fetch group messages when selectedGroup changes
+  useEffect(() => {
+    if (!selectedGroup) return;
+    setSelectedUser(null); // Deselect user if group selected
+    const fetchGroupMessages = async () => {
+      setLoadingMessages(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`http://localhost:5000/api/messages/group/${selectedGroup._id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setMessages(res.data);
+      } catch (err) {
+        setError('Failed to load group messages');
+      } finally {
+        setLoadingMessages(false);
+      }
+    };
+    fetchGroupMessages();
+  }, [selectedGroup]);
+
+  // Socket.io for group messages
+  useEffect(() => {
+    if (!socket.current) return;
+    socket.current.on('new_group_message', (data) => {
+      if (selectedGroup && data.groupId === selectedGroup._id) {
+        setMessages(prev => [...prev, data.message]);
+      }
+      // Optionally: show notification if not in this group
+    });
+    return () => {
+      socket.current.off('new_group_message');
+    };
+  }, [selectedGroup]);
+
+  // Group creation dialog logic
+  const handleOpenGroupDialog = () => {
+    setGroupDialogOpen(true);
+    setGroupName('');
+    setGroupMembers([myId]);
+    setGroupError('');
+  };
+  const handleCloseGroupDialog = () => {
+    setGroupDialogOpen(false);
+    setGroupName('');
+    setGroupMembers([myId]);
+    setGroupError('');
+  };
+  const handleToggleGroupMember = (userId) => {
+    setGroupMembers(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) {
+      setGroupError('Group name is required');
+      return;
+    }
+    if (groupMembers.length < 2) {
+      setGroupError('Select at least 2 members');
+      return;
+    }
+    setGroupCreating(true);
+    setGroupError('');
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('http://localhost:5000/api/groups/create', {
+        name: groupName,
+        members: groupMembers,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await fetchGroups(); // Always fetch latest groups after creation
+      setGroupDialogOpen(false);
+      toast.success('Group created!');
+    } catch (err) {
+      setGroupError(err.response?.data?.error || 'Failed to create group');
+    } finally {
+      setGroupCreating(false);
+    }
+  };
+
   // Debounced search function
   const debouncedSearch = useRef(
     debounce(async (q, token) => {
@@ -210,17 +320,18 @@ const Chatpage = () => {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if ((!message.trim() && files.length === 0) || !selectedUser) return;
+    if ((!message.trim() && files.length === 0) || (!selectedUser && !selectedGroup)) return;
     setSending(true);
     try {
       const token = localStorage.getItem('token');
       let res;
-      if (files.length > 0) {
+      if (selectedGroup) {
+        // Group message
         const formData = new FormData();
         files.forEach(file => formData.append('image', file));
         if (message.trim()) formData.append('content', message);
         res = await axios.post(
-          `http://localhost:5000/api/messages/send/${selectedUser._id}`,
+          `http://localhost:5000/api/messages/send-group/${selectedGroup._id}`,
           formData,
           {
             headers: {
@@ -230,11 +341,27 @@ const Chatpage = () => {
           }
         );
       } else {
-        res = await axios.post(
-          `http://localhost:5000/api/messages/send/${selectedUser._id}`,
-          { content: message },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        if (files.length > 0) {
+          const formData = new FormData();
+          files.forEach(file => formData.append('image', file));
+          if (message.trim()) formData.append('content', message);
+          res = await axios.post(
+            `http://localhost:5000/api/messages/send/${selectedUser._id}`,
+            formData,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data',
+              },
+            }
+          );
+        } else {
+          res = await axios.post(
+            `http://localhost:5000/api/messages/send/${selectedUser._id}`,
+            { content: message },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        }
       }
       setMessages((prev) => [...prev, res.data]);
       setMessage('');
@@ -338,26 +465,8 @@ const Chatpage = () => {
   return (
     <>
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#18192A', fontFamily: 'Poppins, sans-serif' }}>
-      <Box sx={{ width: 80, bgcolor: '#191A2F', display: { xs: 'none', md: 'flex' }, flexDirection: 'column', alignItems: 'center', py: 3, gap: 2 }}>
-        <IconButton size="large" sx={{ color: '#fff', mb: 2 }} onClick={handleDrawerOpen}><MenuIcon /></IconButton>
-        <IconButton size="large" sx={{ color: '#fff', mb: 2 }}><ChatIcon /></IconButton>
-        <IconButton size="large" sx={{ color: '#fff', mb: 2 }}><GroupIcon /></IconButton>
-        <IconButton size="large" sx={{ color: '#fff', mb: 2 }}><SettingsIcon /></IconButton>
-      </Box>
-      <Drawer anchor="left" open={drawerOpen} onClose={handleDrawerClose} PaperProps={{ sx: { bgcolor: '#23243a', color: '#fff', width: 320, fontFamily: 'Inter, Roboto, system-ui, sans-serif' } }}>
-        <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <Avatar src={STATIC_IMG} sx={{ width: 72, height: 72 }} />
-          <Typography fontWeight={700} fontSize={20}>{loggedInUser?.name}</Typography>
-          <Typography color="#aaa" fontSize={14}>{loggedInUser?.email}</Typography>
-          <Button fullWidth variant="outlined" sx={{ mt: 2, color: '#fff', borderColor: '#4F8CFF' }} onClick={() => { handleDrawerClose(); navigate('/profile/edit'); }}>My Profile</Button>
-          <Button fullWidth sx={{ color: '#fff' }} startIcon={<GroupIcon />}>New Group</Button>
-          <Button fullWidth sx={{ color: '#fff' }} startIcon={<ContactsIcon />}>Contacts</Button>
-          <Button fullWidth sx={{ color: '#fff' }} startIcon={<CallIcon />}>Calls</Button>
-          <Button fullWidth sx={{ color: '#fff' }} startIcon={<SettingsIcon />}>Settings</Button>
-          <Button fullWidth sx={{ color: '#fff' }} startIcon={<NightlightIcon />}>Night Mode</Button>
-        </Box>
-      </Drawer>
-      <Box sx={ { width: 340, bgcolor: '#23243a', display: { xs: 'none', md: 'flex' }, flexDirection: 'column', borderRight: '1px solid #23243a', boxShadow: 3 }}>
+      {/* Sidebar */}
+      <Box sx={{ width: 340, bgcolor: '#23243a', display: { xs: 'none', md: 'flex' }, flexDirection: 'column', borderRight: '1px solid #23243a', boxShadow: 3 }}>
         <Box sx={{ p: 2, pb: 0 }}>
           <Typography variant="body2" color="#aaa" sx={{ mb: 1, fontWeight: 500 }}>{loggedInUser?.email}</Typography>
           <TextField
@@ -379,6 +488,54 @@ const Chatpage = () => {
         </Box>
         <Divider sx={{ borderColor: '#23243a', mb: 1 }} />
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* GROUPS HEADING AND LIST */}
+          <Typography variant="h6" sx={{ color: '#4F8CFF', fontWeight: 700, px: 2, pt: 1, pb: 0.5, letterSpacing: 1 }}>
+            Groups
+          </Typography>
+          <List
+            sx={{ flex: 0, overflowY: 'auto', bgcolor: 'transparent', px: 1 }}
+            className="hide-scrollbar"
+          >
+            {groups.length === 0 ? (
+              <Typography color="#aaa" sx={{ p: 2 }}>No groups found</Typography>
+            ) : (
+              groups.map((group) => (
+                <ListItemButton
+                  key={group._id}
+                  selected={selectedGroup && selectedGroup._id === group._id}
+                  onClick={() => { setSelectedGroup(group); setSelectedUser(null); }}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 1,
+                    bgcolor: selectedGroup && selectedGroup._id === group._id ? '#2D2E4A' : 'transparent',
+                    transition: 'background 0.2s',
+                    '&:hover': { bgcolor: '#23243a' },
+                    color: '#fff',
+                    alignItems: 'center',
+                    minHeight: 64,
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Avatar src={group.avatar || STATIC_IMG}>{group.name[0]}</Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Typography fontWeight={600} sx={{ color: '#fff', display: 'inline' }}>
+                        {group.name}
+                      </Typography>
+                    }
+                    secondary={
+                      <Typography variant="body2" sx={{ color: '#aaa' }}>
+                        {group.members.length} members
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
+              ))
+            )}
+          </List>
+          <Divider sx={{ borderColor: '#23243a', my: 1 }} />
+          {/* DIRECT MESSAGE LIST BELOW GROUPS */}
           <List
             subheader={<ListSubheader sx={{ bgcolor: 'transparent', color: '#aaa', fontWeight: 700, fontSize: 16 }}>Direct Message</ListSubheader>}
             sx={{ flex: 1, overflowY: 'auto', bgcolor: 'transparent', px: 1 }}
@@ -765,6 +922,50 @@ const Chatpage = () => {
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
             <Button onClick={handleEditCancel}>Cancel</Button>
             <Button onClick={handleEditSave} color="primary" variant="contained">Save</Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={groupDialogOpen} onClose={handleCloseGroupDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>Create New Group</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Group Name"
+            type="text"
+            fullWidth
+            value={groupName}
+            onChange={e => setGroupName(e.target.value)}
+            disabled={groupCreating}
+            error={!!groupError && !groupName.trim()}
+            helperText={!!groupError && !groupName.trim() ? groupError : ''}
+          />
+          <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Select Members</Typography>
+          <List dense sx={{ maxHeight: 200, overflowY: 'auto' }}>
+            {users.map(user => (
+              <ListItem key={user._id} button onClick={() => handleToggleGroupMember(user._id)} disabled={user._id === myId}>
+                <ListItemAvatar>
+                  <Avatar src={STATIC_IMG}>{user.name[0]}</Avatar>
+                </ListItemAvatar>
+                <ListItemText primary={user.name} secondary={user.email} />
+                <input
+                  type="checkbox"
+                  checked={groupMembers.includes(user._id)}
+                  onChange={() => handleToggleGroupMember(user._id)}
+                  disabled={user._id === myId}
+                  style={{ marginLeft: 8 }}
+                />
+              </ListItem>
+            ))}
+          </List>
+          {groupError && (
+            <Typography color="error" sx={{ mt: 1 }}>{groupError}</Typography>
+          )}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+            <Button onClick={handleCloseGroupDialog} disabled={groupCreating}>Cancel</Button>
+            <Button onClick={handleCreateGroup} color="primary" variant="contained" disabled={groupCreating}>
+              {groupCreating ? 'Creating...' : 'Create'}
+            </Button>
           </Box>
         </DialogContent>
       </Dialog>
