@@ -19,6 +19,7 @@
     "@mui/x-date-pickers": "^8.8.0",
     "@tailwindcss/vite": "^4.1.6",
     "axios": "^1.10.0",
+    "dayjs": "^1.11.13",
     "framer-motion": "^12.23.3",
     "icons": "^1.0.0",
     "lodash.debounce": "^4.0.8",
